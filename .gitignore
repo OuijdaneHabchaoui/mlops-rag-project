@@ -110,4 +110,6 @@ Desktop.ini
 
 # --- Outils sécurité ---
 .bandit_report.json
-.gitleaks_report.json
+# --- Travail personnel (non public) ---
+ROADMAP.md
+docs/rapport_experimentations.md

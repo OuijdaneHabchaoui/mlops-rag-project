@@ -1,4 +1,5 @@
 """Tests de validation des datasets golden — format JSONL Ragas-ready."""
+
 from __future__ import annotations
 
 import json
@@ -32,11 +33,14 @@ def test_at_least_three_golden_datasets(all_datasets: list[Path]):
     assert not missing, f"Datasets golden manquants : {missing}"
 
 
-@pytest.mark.parametrize("dataset_name", [
-    "reference_test_set_30.jsonl",
-    "natural_language_test_set_20.jsonl",
-    "natural_language_rag_style_20.jsonl",
-])
+@pytest.mark.parametrize(
+    "dataset_name",
+    [
+        "reference_test_set_30.jsonl",
+        "natural_language_test_set_20.jsonl",
+        "natural_language_rag_style_20.jsonl",
+    ],
+)
 def test_dataset_is_valid_jsonl(data_dir: Path, dataset_name: str):
     """Chaque ligne doit être un JSON valide."""
     path = data_dir / dataset_name
@@ -50,11 +54,14 @@ def test_dataset_is_valid_jsonl(data_dir: Path, dataset_name: str):
                 pytest.fail(f"{dataset_name}:L{line_num} — JSON invalide : {e}")
 
 
-@pytest.mark.parametrize("dataset_name", [
-    "reference_test_set_30.jsonl",
-    "natural_language_test_set_20.jsonl",
-    "natural_language_rag_style_20.jsonl",
-])
+@pytest.mark.parametrize(
+    "dataset_name",
+    [
+        "reference_test_set_30.jsonl",
+        "natural_language_test_set_20.jsonl",
+        "natural_language_rag_style_20.jsonl",
+    ],
+)
 def test_dataset_has_required_fields(data_dir: Path, dataset_name: str):
     """Chaque item doit contenir les champs obligatoires Ragas."""
     path = data_dir / dataset_name
@@ -64,9 +71,7 @@ def test_dataset_has_required_fields(data_dir: Path, dataset_name: str):
                 continue
             obj = json.loads(line)
             missing = REQUIRED_FIELDS - set(obj.keys())
-            assert not missing, (
-                f"{dataset_name}:L{line_num} — champs requis manquants : {missing}"
-            )
+            assert not missing, f"{dataset_name}:L{line_num} — champs requis manquants : {missing}"
 
 
 def test_reference_dataset_has_30_questions(data_dir: Path):
@@ -76,10 +81,13 @@ def test_reference_dataset_has_30_questions(data_dir: Path):
     assert n == 30, f"reference_test_set_30 doit avoir 30 questions, trouvé : {n}"
 
 
-@pytest.mark.parametrize("dataset_name", [
-    "natural_language_test_set_20.jsonl",
-    "natural_language_rag_style_20.jsonl",
-])
+@pytest.mark.parametrize(
+    "dataset_name",
+    [
+        "natural_language_test_set_20.jsonl",
+        "natural_language_rag_style_20.jsonl",
+    ],
+)
 def test_natural_datasets_have_20_questions(data_dir: Path, dataset_name: str):
     path = data_dir / dataset_name
     with open(path, encoding="utf-8") as f:
@@ -96,6 +104,4 @@ def test_no_empty_answers(data_dir: Path, all_datasets: list[Path]):
                     continue
                 obj = json.loads(line)
                 answer = obj.get("expected_answer", "").strip()
-                assert answer, (
-                    f"{path.name}:L{line_num} — expected_answer vide"
-                )
+                assert answer, f"{path.name}:L{line_num} — expected_answer vide"

@@ -1,6 +1,8 @@
 """Configuration centralisée — charge .env et expose les variables typées."""
+
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).parent.resolve()

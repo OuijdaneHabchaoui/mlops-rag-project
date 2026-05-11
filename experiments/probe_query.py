@@ -2,16 +2,20 @@
 Probe script: envoie une question au pipeline et capture tous les evenements SSE bruts.
 Sert a prouver les hypotheses sur la cause des echecs.
 """
+
 import json
+
 import requests
 
 BASE_URL = "http://localhost:5010"
 
 
 def new_conversation(conv_type="rcar"):
-    r = requests.post(f"{BASE_URL}/api/v1/conversation/new",
-                      json={"title": "probe-test", "conversation_type": conv_type},
-                      timeout=10)
+    r = requests.post(
+        f"{BASE_URL}/api/v1/conversation/new",
+        json={"title": "probe-test", "conversation_type": conv_type},
+        timeout=10,
+    )
     return r.json()["conversation_id"]
 
 
@@ -59,9 +63,11 @@ def probe(question: str, label: str, conv_type: str = "rcar"):
     final_state = next((e for e in events if e.get("type") == "final_state"), None)
     types_recus = [e.get("type") for e in events if e.get("type") != "token"]
 
-    print(f"\n--- RESUME ---")
+    print("\n--- RESUME ---")
     print(f"Types evenements (hors tokens) : {types_recus}")
-    print(f"Evenement 'sources' emis       : {'OUI' if sources_events else 'NON <- PROUVE: pas de sources'}")
+    print(
+        f"Evenement 'sources' emis       : {'OUI' if sources_events else 'NON <- PROUVE: pas de sources'}"
+    )
     if sources_events:
         srcs = sources_events[0].get("sources", [])
         print(f"Nombre de chunks recus         : {len(srcs)}")
@@ -71,16 +77,16 @@ def probe(question: str, label: str, conv_type: str = "rcar"):
         print(f"Intent detecte                 : {state.get('intent')}  (tier={state.get('tier')})")
         sub_q = state.get("sub_queries")
         if sub_q:
-            print(f"Sous-questions generees        :")
+            print("Sous-questions generees        :")
             for sq in sub_q:
                 print(f"  -> [{sq.get('intent')}] {sq.get('text', sq.get('question', ''))}")
         else:
-            print(f"Sous-questions generees        : aucune")
+            print("Sous-questions generees        : aucune")
         print(f"Chunks dans le state           : {len(state.get('retrieved_chunks') or [])}")
         print(f"Sources dans le state          : {len(state.get('sources') or [])}")
 
-    print(f"\nREPONSE FINALE:")
-    safe = (answer[:600] if answer else "(vide)").encode('ascii', errors='replace').decode('ascii')
+    print("\nREPONSE FINALE:")
+    safe = (answer[:600] if answer else "(vide)").encode("ascii", errors="replace").decode("ascii")
     print(safe)
     print()
 
@@ -90,14 +96,14 @@ if __name__ == "__main__":
     # Ces questions sont classifiees multi_part -> 0 contextes
     probe(
         "Je travaille comme agent temporaire dans une commune depuis 5 ans, est-ce que j ai droit a une retraite ?",
-        "GROUPE A (echoue) - doit prouver: intent=multi_part, sources=NON"
+        "GROUPE A (echoue) - doit prouver: intent=multi_part, sources=NON",
     )
 
     # --- HYPOTHESE 2 ---
     # Ces questions ont un bon intent + 5 contextes mais LLM refuse
     probe(
         "Je viens d etre recrute comme contractuel dans un etablissement public, comment m inscrire pour avoir une retraite ?",
-        "GROUPE B (echoue) - doit prouver: intent correct, sources=OUI, mais Je ne retrouve pas"
+        "GROUPE B (echoue) - doit prouver: intent correct, sources=OUI, mais Je ne retrouve pas",
     )
 
     # --- CONTROLE ---
@@ -105,5 +111,5 @@ if __name__ == "__main__":
     probe(
         "Je suis avocat inscrit au barreau depuis 10 ans, est-ce qu il existe une caisse de retraite speciale pour les avocats au Maroc ?",
         "GROUPE C (fonctionne) - doit prouver: intent correct, sources=OUI, bonne reponse",
-        conv_type="cnra"
+        conv_type="cnra",
     )

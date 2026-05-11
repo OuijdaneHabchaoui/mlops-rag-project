@@ -16,18 +16,21 @@ Usage :
         response = rag_client.query("Qu'est-ce que le RCAR ?")
         tracker.attach_response(span, response)
 """
+
 from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any, Iterator, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # Import safe : si langfuse n'est pas installé, on tombe en no-op
 try:
     from langfuse import Langfuse
+
     LANGFUSE_AVAILABLE = True
 except ImportError:  # pragma: no cover
     Langfuse = None  # type: ignore[assignment]
@@ -47,15 +50,15 @@ class LangfuseTracker:
 
     def __init__(
         self,
-        mlflow_run_id: Optional[str] = None,
-        session_name: Optional[str] = None,
+        mlflow_run_id: str | None = None,
+        session_name: str | None = None,
         environment: str = "evaluation",
     ) -> None:
         self.mlflow_run_id = mlflow_run_id
         self.session_name = session_name
         self.environment = environment
         self.enabled = False
-        self.client: Optional[Any] = None
+        self.client: Any | None = None
 
         if not LANGFUSE_AVAILABLE:
             logger.info("Langfuse non installe — tracking desactive (no-op)")
@@ -89,9 +92,9 @@ class LangfuseTracker:
     def trace_query(
         self,
         question: str,
-        category: Optional[str] = None,
-        expected_answer: Optional[str] = None,
-    ) -> Iterator[Optional[Any]]:
+        category: str | None = None,
+        expected_answer: str | None = None,
+    ) -> Iterator[Any | None]:
         """Ouvre une trace pour UNE question RAG. Auto-close à la sortie du with.
 
         Yields l'objet trace (ou None si Langfuse desactive).
@@ -120,11 +123,11 @@ class LangfuseTracker:
 
     def attach_response(
         self,
-        span: Optional[Any],
+        span: Any | None,
         answer: str,
         contexts: list[str],
         latency_seconds: float,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> None:
         """Attache la reponse RAG a la trace en cours."""
         if span is None or not self.enabled:

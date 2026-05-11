@@ -10,6 +10,7 @@ Contrat d'API découvert lors de la Phase 0 (cf ROADMAP.md D14, D15) :
                                          data: {"type":"token", content:"...", ...}    (répété)
                                          data: {"type":"done", conversation_id, exchange_id, error, ...}
 """
+
 from __future__ import annotations
 
 import json
@@ -17,7 +18,6 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional
 
 import requests
 
@@ -32,9 +32,9 @@ class RAGResponse:
     contexts: list[str] = field(default_factory=list)
     sources_metadata: list[dict] = field(default_factory=list)
     latency_seconds: float = 0.0
-    conversation_id: Optional[str] = None
-    exchange_id: Optional[str] = None
-    error: Optional[str] = None
+    conversation_id: str | None = None
+    exchange_id: str | None = None
+    error: str | None = None
     raw_events: list[dict] = field(default_factory=list)
 
     @property
@@ -70,7 +70,7 @@ class RAGClient:
     def create_conversation(
         self,
         conversation_type: str = "rcar",
-        title: Optional[str] = None,
+        title: str | None = None,
     ) -> str:
         if conversation_type not in self.VALID_CONV_TYPES:
             raise ValueError(
@@ -95,14 +95,14 @@ class RAGClient:
     def query(
         self,
         question: str,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
         conversation_type: str = "rcar",
     ) -> RAGResponse:
         """Pose une question au RAG, parse le SSE, retourne une RAGResponse."""
         if conversation_id is None:
             conversation_id = self.create_conversation(conversation_type=conversation_type)
 
-        last_exc: Optional[Exception] = None
+        last_exc: Exception | None = None
         for attempt in range(1, self.max_retries + 1):
             try:
                 start = time.perf_counter()
@@ -111,24 +111,20 @@ class RAGClient:
                 return resp
             except (requests.RequestException, ValueError) as exc:
                 last_exc = exc
-                logger.warning(
-                    "Query attempt %d/%d failed: %s", attempt, self.max_retries, exc
-                )
+                logger.warning("Query attempt %d/%d failed: %s", attempt, self.max_retries, exc)
                 if attempt < self.max_retries:
-                    time.sleep(self.retry_backoff ** attempt)
+                    time.sleep(self.retry_backoff**attempt)
 
-        raise RuntimeError(
-            f"RAG query failed after {self.max_retries} attempts: {last_exc}"
-        )
+        raise RuntimeError(f"RAG query failed after {self.max_retries} attempts: {last_exc}")
 
     def _stream_query(self, question: str, conversation_id: str) -> RAGResponse:
         payload = {"query": question, "conversation_id": conversation_id}
         tokens: list[str] = []
         contexts: list[str] = []
         sources_metadata: list[dict] = []
-        exchange_id: Optional[str] = None
-        final_conv_id: Optional[str] = None
-        error: Optional[str] = None
+        exchange_id: str | None = None
+        final_conv_id: str | None = None
+        error: str | None = None
         raw_events: list[dict] = []
 
         with self.session.post(
@@ -142,7 +138,7 @@ class RAGClient:
             for line in r.iter_lines(decode_unicode=True):
                 if not line or not line.startswith("data:"):
                     continue
-                data_str = line[len("data:"):].strip()
+                data_str = line[len("data:") :].strip()
                 if not data_str:
                     continue
                 try:
@@ -190,7 +186,7 @@ class RAGClient:
     def close(self) -> None:
         self.session.close()
 
-    def __enter__(self) -> "RAGClient":
+    def __enter__(self) -> RAGClient:
         return self
 
     def __exit__(self, *_exc) -> None:

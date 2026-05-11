@@ -1,4 +1,5 @@
 """Smoke test Langfuse Cloud — envoie une trace fictive pour valider le setup."""
+
 from langfuse import Langfuse, observe
 
 from config import (
@@ -17,9 +18,7 @@ langfuse = Langfuse(
 )
 
 if not langfuse.auth_check():
-    raise SystemExit(
-        f"Echec auth Langfuse sur {LANGFUSE_HOST}. Verifie les cles dans .env."
-    )
+    raise SystemExit(f"Echec auth Langfuse sur {LANGFUSE_HOST}. Verifie les cles dans .env.")
 
 
 @observe(name="retrieval")

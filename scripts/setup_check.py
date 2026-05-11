@@ -2,6 +2,7 @@
 
 Usage : python scripts/setup_check.py
 """
+
 import sys
 from pathlib import Path
 
@@ -22,7 +23,9 @@ def check(label: str, ok: bool, detail: str = "") -> bool:
 
 
 def check_python() -> bool:
-    return check("Python >= 3.10", sys.version_info >= (3, 10), f"actuel : {sys.version.split()[0]}")
+    return check(
+        "Python >= 3.10", sys.version_info >= (3, 10), f"actuel : {sys.version.split()[0]}"
+    )
 
 
 def check_imports() -> bool:
@@ -31,25 +34,32 @@ def check_imports() -> bool:
         try:
             __import__(pkg)
             results.append(check(f"import {pkg}", True))
-        except ImportError as e:
-            results.append(check(f"import {pkg}", False, str(e)))
+        except ImportError:
+            results.append(check(f"import {pkg}", False, "Package non trouvé"))
     return all(results)
 
 
 def check_mlflow_server() -> bool:
     import urllib.request
+
     try:
         urllib.request.urlopen(f"{MLFLOW_TRACKING_URI}/health", timeout=3)
         return check(f"serveur MLflow joignable ({MLFLOW_TRACKING_URI})", True)
-    except Exception as e:
-        return check(f"serveur MLflow joignable ({MLFLOW_TRACKING_URI})", False,
-                     "lance start_mlflow.bat dans un autre terminal")
+    except Exception:
+        return check(
+            f"serveur MLflow joignable ({MLFLOW_TRACKING_URI})",
+            False,
+            "lance start_mlflow.bat dans un autre terminal",
+        )
 
 
 def check_langfuse_keys() -> bool:
     has_keys = bool(LANGFUSE_PUBLIC_KEY) and bool(LANGFUSE_SECRET_KEY)
-    return check(f"cles Langfuse presentes (host : {LANGFUSE_HOST})", has_keys,
-                 "copie .env.example -> .env et colle les cles" if not has_keys else "")
+    return check(
+        f"cles Langfuse presentes (host : {LANGFUSE_HOST})",
+        has_keys,
+        "copie .env.example -> .env et colle les cles" if not has_keys else "",
+    )
 
 
 def check_langfuse_auth() -> bool:
@@ -57,9 +67,10 @@ def check_langfuse_auth() -> bool:
         return check("Langfuse auth", False, "skip — cles absentes")
     try:
         from langfuse import Langfuse
-        client = Langfuse(public_key=LANGFUSE_PUBLIC_KEY,
-                          secret_key=LANGFUSE_SECRET_KEY,
-                          host=LANGFUSE_HOST)
+
+        client = Langfuse(
+            public_key=LANGFUSE_PUBLIC_KEY, secret_key=LANGFUSE_SECRET_KEY, host=LANGFUSE_HOST
+        )
         ok = client.auth_check() if hasattr(client, "auth_check") else True
         return check("Langfuse auth_check", bool(ok))
     except Exception as e:

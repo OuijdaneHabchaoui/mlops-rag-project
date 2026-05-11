@@ -1,4 +1,5 @@
 """Tests unitaires pour pipeline.rag_client."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -53,7 +54,7 @@ class TestRAGClientInit:
         assert client.timeout == 60.0
 
     def test_valid_conversation_types(self):
-        assert RAGClient.VALID_CONV_TYPES == {"rcar", "cnra"}
+        assert {"rcar", "cnra"} == RAGClient.VALID_CONV_TYPES
 
 
 class TestCreateConversation:

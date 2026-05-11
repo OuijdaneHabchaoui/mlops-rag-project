@@ -1,0 +1,27 @@
+# ============================================================================
+# MLOps_RAG_Project — dépendances DEV (qualité code + tests)
+# Install : pip install -r requirements-dev.txt
+# ============================================================================
+
+# Inclut les deps production
+-r requirements.txt
+
+# --- Qualité code ---
+ruff>=0.4.0           # linter rapide (flake8 + isort + pylint)
+black>=24.0.0         # formateur Python
+pre-commit>=3.5.0     # hooks Git automatiques
+
+# --- Tests ---
+pytest>=7.4.0
+pytest-cov>=4.1.0     # coverage
+pytest-mock>=3.12.0   # mocks
+httpx>=0.27.0         # client HTTP pour tester l'API RAG
+
+# --- Type checking (optionnel) ---
+mypy>=1.8.0
+types-requests
+types-PyYAML
+
+# --- Sécurité ---
+bandit>=1.7.5         # scan vulnérabilités Python
+pip-audit>=2.6.0      # scan vulnérabilités dépendances

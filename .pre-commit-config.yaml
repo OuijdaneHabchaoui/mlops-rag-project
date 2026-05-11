@@ -1,0 +1,97 @@
+# ============================================================================
+# Pre-commit hooks — qualité code automatique avant chaque commit
+# Setup : pre-commit install
+# Run manuel : pre-commit run --all-files
+# ============================================================================
+
+repos:
+  # ------------------------------------------------------------------
+  # Hooks Python officiels — vérifications de base
+  # ------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        description: Supprime les espaces en fin de ligne
+      - id: end-of-file-fixer
+        description: Garantit une ligne vide à la fin des fichiers
+      - id: check-yaml
+        description: Valide la syntaxe YAML
+      - id: check-toml
+        description: Valide la syntaxe TOML
+      - id: check-json
+        description: Valide la syntaxe JSON
+        exclude: ^(notebooks/|experiments/runs/)
+      - id: check-added-large-files
+        args: ['--maxkb=5000']
+        description: Bloque les fichiers >5 MB (évite de commit datasets/modèles)
+      - id: check-merge-conflict
+        description: Détecte les marqueurs de conflit non résolus
+      - id: detect-private-key
+        description: Bloque le commit de clés privées
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+        description: Normalise les fins de ligne (LF)
+
+  # ------------------------------------------------------------------
+  # Ruff — linter Python ultra-rapide
+  # ------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.10
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        description: Lint + auto-fix Python
+      - id: ruff-format
+        description: Formatage Python (alternative à black)
+
+  # ------------------------------------------------------------------
+  # Black — formateur Python (peut coexister avec ruff-format)
+  # ------------------------------------------------------------------
+  - repo: https://github.com/psf/black
+    rev: 24.4.2
+    hooks:
+      - id: black
+        language_version: python3
+        description: Formatage Python
+
+  # ------------------------------------------------------------------
+  # Bandit — scan sécurité Python
+  # ------------------------------------------------------------------
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.9
+    hooks:
+      - id: bandit
+        args: ['-c', 'pyproject.toml', '--skip', 'B101']
+        additional_dependencies: ['bandit[toml]']
+        description: Scan vulnérabilités sécurité dans le code Python
+        exclude: ^tests/
+
+  # ------------------------------------------------------------------
+  # Secrets detection — détecte les credentials commités par erreur
+  # ------------------------------------------------------------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+        description: Bloque le commit de secrets (clés API, tokens, etc.)
+
+# ============================================================================
+# Configuration globale
+# ============================================================================
+default_language_version:
+  python: python3
+
+default_stages: [pre-commit]
+
+# Excluded paths (déjà couverts par .gitignore mais on est explicite)
+exclude: |
+  (?x)^(
+    mlruns/.*|
+    mlartifacts/.*|
+    experiments/runs/.*|
+    logs/.*|
+    __pycache__/.*|
+    \.venv/.*|
+    \.env(\..+)?
+  )$

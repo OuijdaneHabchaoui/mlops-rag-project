@@ -1,0 +1,72 @@
+# ============================================================================
+# .dockerignore — exclut les fichiers inutiles du contexte de build Docker
+# Réduit drastiquement la taille du contexte envoyé au daemon
+# ============================================================================
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI / GitHub
+.github/
+
+# Documentation (pas nécessaire dans l'image)
+docs/
+*.md
+!README.md
+
+# Données volumineuses (montées en volume au runtime)
+mlruns/
+mlartifacts/
+mlflow.db
+mlflow.db.OLD*
+experiments/runs/
+logs/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Environnements virtuels (DOIVENT être exclus)
+.venv/
+venv/
+env/
+
+# IDE & éditeurs
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Secrets (CRITIQUE)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Notebooks
+notebooks/
+*.ipynb
+
+# Tests
+tests/
+.pytest_cache/
+
+# Backups
+*.backup
+*.bak
+
+# Docker artifacts
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+docker/

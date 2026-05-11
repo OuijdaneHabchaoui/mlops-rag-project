@@ -1,0 +1,98 @@
+[
+  {
+    "question": "Qu'est-ce que le FRAM ?",
+    "answer": "",
+    "contexts": [],
+    "ground_truth": "Le Fonds de Retraite des Avocats du Maroc (FRAM) est un régime dédié aux avocats titulaires et stagiaires, assurant des prestations de retraite, d'invalidité et de décès.",
+    "latency_seconds": 0.0,
+    "category": "",
+    "organization": "",
+    "source_doc": "",
+    "error": "RAG query failed after 3 attempts: HTTPConnectionPool(host='localhost', port=5010): Read timed out."
+  },
+  {
+    "question": "Comment s'affilier au FRAM ?",
+    "answer": "Je ne retrouve pas cette information dans ma base de connaissance actuelle concernant spécifiquement le **Fonds de Retraite des Agents des Ministères (FRAM)**.\nVeuillez m'excuser. Puis-je vous aider avec une autre question ?",
+    "contexts": [
+      "**Suivez les instructions** : Suivez les instructions fournies pour effectuer la simulation. Les résultats seront donnés à titre indicatif et non contractuel.\n\nSi vous avez des difficultés ou des questions supplémentaires, n'hésitez pas à consulter les documents disponibles sur le site ou à contacter le service client de la CNRA. ────────────────────────────────────────────────────────────────────────────────\nQ40: Quelles sont les conditions pour bénéficier d'une rente / capital RECORE ? ────────────────────────────────────────────────────────────────────────────────\n\nPour bénéficier d'une rente ou d'un capital dans le cadre de RECORE, les conditions sont les suivantes :\n\n1. **Âge de jouissance** : L'âge de jouissance de l'épargne retraite complémentaire est fixé à soixante (60) ans. Cet âge peut être prorogé jusqu'à soixante-quinze (75) ans. Toutefois, cet âge peut être anticipé à partir de cinquante (50) ans. Pour les contrats d'adhésion groupe, l'âge de jouissance est fixé au niveau des Conditions Particulières dans l'intervalle de 50 à 75 ans. 2. **Invalidité totale et définitive** : En cas d'invalidité totale et définitive de l'affilié, ce dernier perçoit le montant de l'épargne retraite constituée sous forme de capital ou de rente viagère, à condition que le montant de ladite rente soit supérieur au minimum défini à l'article 19 des Conditions Générales. L'état d'invalidité totale et définitive doit être confirmé par un rapport médical établi par un médecin assermenté, avant le terme du contrat. 3.\n\n**Prestations garanties** : Les prestations garanties incluent une rente viagère, un capital ou une prestation mixte entre rente viagère et capital. Le montant de la prestation résulte de la revalorisation des cotisations versées conformément aux dispositions des articles 12, 13 et 14 des Conditions Générales et inscrites au compte individuel ouvert au nom de l'affilié. 4. **Réversion des rentes** : En cas de décès de l'assuré, la rente servie à son profit est reversée au(x) conjoint(s) et orphelins, selon les modalités définies dans les Conditions Particulières. La rente de réversion au profit du conjoint correspond à 50% de la rente principale servie au profit de l'assuré à la date de décès. Pour les orphelins, la rente de réversion est également de 50% de la rente principale et est répartie à parts égales entre les orphelins éligibles.",
+      "Cet âge peut être :\n- **Prorogé jusqu'à 75 ans**\n- **Anticipé à partir de 50 ans**\n\nPour les contrats d'adhésion groupe, l'âge de jouissance est fixé au niveau des Conditions Particulières dans l'intervalle de **50 à 75 ans**.\n\n---\n\n### Q: Quelles sont les prestations à court terme ? **R:** Vous pouvez bénéficier, à tout moment, des rachats et avances selon les modalités ci-après, sous réserve des clauses contractuelles prévues par les Conditions Particulières exigées par le contractant :\n\n**Rachat Total :**\n- Vous pouvez demander le rachat total de vos cotisations, nettes de chargements pour frais d'acquisition, après déduction, éventuellement, des rachats partiels et des avances non remboursées\n- Conditions : justifier de **trois (3) années de cotisations** et être âgé de **moins de 50 ans**\n- Ces cotisations sont majorées de la participation aux bénéfices, selon la durée de votre affiliation\n\n**Rachat Partiel :**\n- À condition de justifier de **trois (3) années de cotisations**, vous pouvez demander à tout moment le rachat partiel du solde de votre compte individuel\n- Conditions :\n  - Vous n'avez pas déjà liquidé vos droits\n  - Vous n'avez pas d'avance sur contrat en cours\n\n**À noter que :**\n- La CNRA prélève **3% du montant** de votre rachat partiel si ce dernier est effectué avant l'âge de cinquante (50) ans\n- Aucun prélèvement sur le montant de votre rachat partiel n'est effectué au-delà de l'âge de cinquante (50) ans\n- Le cumul de vos rachats partiels ne peut excéder **80% du total de vos cotisations**\n\n**Avance sur Contrat :**\n- Vous pouvez demander une avance sur le montant de vos droits constitués\n- Conditions : justifier d'au moins **trois (3) années de cotisations** et ne pas avoir liquidé vos droits constitués\n- Le cumul du montant de votre avance (en nominal et intérêts) et de vos rachats partiels ne peut excéder **80% du total de vos cotisations versées**\n- La durée maximale de remboursement de votre avance sur contrat est de **24 mois** produisant des intérêts calculés au maximum entre le taux de rendement du régime de l'exercice précédent et le taux minimum garanti, augmenté de 1% (soit 100 points de base)\n- L'octroi d'une nouvelle avance sur contrat ne peut avoir lieu qu'après le remboursement de votre avance précédente ou de sa transformation en rachat\n\n---\n\n### Q: Quelles sont les prestations en cas de décès ou d'invalidité de l'affilié ? **R:** \n\n**Décès de l'affilié avant le terme du contrat :**\n- En cas de désignation de bénéficiaire(s), il sera procédé au versement du montant de l'épargne retraite constituée sous forme de capital ou de rente à leur profit\n- Pour le cas de la rente, elle doit être supérieure au minimum défini à l'article 19 des conditions générales de RECORE\n- En cas de non-désignation de bénéficiaire(s), il sera procédé au versement du montant de l'épargne retraite constituée selon les modalités arrêtées par l'article 18 des conditions générales du produit RECORE",
+      "2. **Montant minimum** :\n   - Le montant de chaque cotisation ne peut être inférieur à 100 Dhs. Pour les contrats d'adhésion groupe, un montant minimum différent peut être fixé dans les Conditions Particulières.\n\n3. **Modalités de versement** :\n   - Les cotisations sont versées à la CNRA par l'affilié directement ou par l'entremise d'un intermédiaire dans le cas d'affiliation individuelle. - Dans le cas d'un contrat d'adhésion groupe, les cotisations sont versées par le contractant, moyennant des précomptes sur les émoluments de l'affilié le cas échéant. - En cas de changement de contractant, l'affilié doit en informer la CNRA. À défaut, les Conditions Particulières établies avec le dernier contractant continuent d'être appliquées. - Les versements peuvent être effectués selon les différents modes de paiement admis par la législation et la réglementation en vigueur, à l'exclusion du versement en espèces.\n\nLes chèques doivent être libellés au nom de la CNRA, barrés et comportant la mention \"non endossable\". ────────────────────────────────────────────────────────────────────────────────\nQ20: bonjour, c'est quoi recore?\n\n────────────────────────────────────────────────────────────────────────────────\n\nBonjour ! RECORE est un régime de retraite complémentaire géré par la Caisse Nationale de Retraites et d'Assurances (CNRA). Il permet la constitution et le service d'une épargne retraite complémentaire pour ses affiliés.",
+      "De plus, l'avocat bénéficie des :\n - Intérêts versés annuellement par la CDG sur le compte global des avocats (à condition que l'avocat ait un compte professionnel ouvert à la banque « BANK OF AFRICA »). - Ressources éventuelles (dons et aides) pouvant être arrêtées par son barreau. Par ailleurs, l'avocat peut à tout moment procéder à des versements forfaitaires à titre de validation des années antérieures, ce qui lui permet d'acquérir plus de points après son affiliation au FRAM et ce, une fois la demande de validation renseignée (imprimé téléchargeable sur le site web CNRA). L'avocat a la faculté d'étaler la validation sur plusieurs années ; chaque demande de validation étant introduite une fois par an,\n Le nombre de points est déterminé en divisant les intérêts, les cotisations, les validations et autres ressources par la valeur d'acquisition du point de l'année en vigueur. Le nombre de points correspondant à chaque cotisation individuelle et validation est majoré en fonction de l'âge de l'affilié.",
+      "Q: Quels sont les droits garantis par FRAM en cas d'invalidité ? L'incapacité totale et définitive d'exercer la profession, et dont le taux IPP supérieur ou égal à 67%, ouvre droit à l'avocat affilié de bénéficier d'une pension d'invalidité à vie :\n - Si l'avocat est âgé de 40 ans au plus : Au remboursement unique égal au produit du total des points acquis à la date d'invalidité, par la valeur d'acquisition du point au moment de la liquidation ;\n - Si l'avocat est âgé de plus de 40 ans : A la liquidation d'une rente par anticipation avec application de coefficients selon l'âge à la demande de liquidation. En cas du décès d'un avocat bénéficiaire, la pension est réversible au profit des ayant causes. Q: Quelles sont les pièces nécessaires pour la liquidation de la pension d'invalidité FRAM ? Les pièces nécessaires à la liquidation de la pension d'invalidité FRAM sont :\n • La demande de liquidation dûment renseignée\n • Une copie de la CNIE\n • Un spécimen de chèque ou attestation du RIB\n • Attestation médicale d'invalidité\n\nQ: En cas de décès qui bénéficiera de mes droits ? - En cas de décès de l'avocat marié, ses droits acquis sont réversibles au profit du conjoint et des orphelins à raison de 50% chacun."
+    ],
+    "ground_truth": "L'avocat s'affilie au FRAM à travers le barreau duquel il relève, qui transmet à la CNRA une demande signée et une copie de la CNIE.",
+    "latency_seconds": 115.48620929999743,
+    "conversation_id": "64489d74-5ea8-4203-b5d1-f0bd97cf2227",
+    "exchange_id": "d07cf78f-5a53-4da3-bb30-7c8c0ced5522",
+    "category": "Gestion Administrative",
+    "organization": "CNRA",
+    "source_doc": "LAYER_INGESTIONS/cnra/faq/Global/faq_cnra/faq_cnra_faq_20251103.md",
+    "error": null
+  },
+  {
+    "question": "Quelle est la démarche pour changer le montant de ma cotisation au FRAM ?",
+    "answer": "",
+    "contexts": [],
+    "ground_truth": "Le montant peut être changé au début de chaque année. Il suffit d’en aviser la CNRA par l’intermédiaire du conseil de l’ordre avant le 1er octobre.",
+    "latency_seconds": 0.0,
+    "category": "",
+    "organization": "",
+    "source_doc": "",
+    "error": "RAG query failed after 3 attempts: HTTPConnectionPool(host='localhost', port=5010): Max retries exceeded with url: /api/v1/query (Caused by NewConnectionError(\"HTTPConnection(host='localhost', port=5010): Failed to establish a new connection: [WinError 10061] Aucune connexion n’a pu être établie car l’ordinateur cible l’a expressément refusée\"))"
+  },
+  {
+    "question": "Comment sont répartis les intérêts versés annuellement par la CDG pour le FRAM ?",
+    "answer": "",
+    "contexts": [],
+    "ground_truth": "50% de manière égalitaire entre tous les avocats titulaires ayant un compte à la BANK OF AFRICA, et 50% au prorata du solde annuel moyen de leur compte.",
+    "latency_seconds": 0.0,
+    "category": "",
+    "organization": "",
+    "source_doc": "",
+    "error": "('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
+  },
+  {
+    "question": "Quand demander la liquidation de ma pension FRAM ?",
+    "answer": "",
+    "contexts": [],
+    "ground_truth": "L'avocat a la possibilité de bénéficier de sa retraite à partir de l’âge de 60 ans.",
+    "latency_seconds": 0.0,
+    "category": "",
+    "organization": "",
+    "source_doc": "",
+    "error": "('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
+  },
+  {
+    "question": "Quelles sont les conditions pour bénéficier d'une pension de retraite FRAM ?",
+    "answer": "",
+    "contexts": [],
+    "ground_truth": "L'avocat a droit à une pension à vie si le nombre de points acquis est supérieur à 10 000 points. Sinon, il perçoit un versement unique (pécule) à 60 ans.",
+    "latency_seconds": 0.0,
+    "category": "",
+    "organization": "",
+    "source_doc": "",
+    "error": "('Connection aborted.', ConnectionAbortedError(10053, 'Une connexion établie a été abandonnée par un logiciel de votre ordinateur hôte', None, 10053, None))"
+  },
+  {
+    "question": "Comment est calculée la pension FRAM ?",
+    "answer": "",
+    "contexts": [],
+    "ground_truth": "La pension annuelle de la retraite est égale au produit total des points acquis par le bénéficiaire par la valeur de service du point à la date d’effet de la pension.",
+    "latency_seconds": 0.0,
+    "category": "",
+    "organization": "",
+    "source_doc": "",
+    "error": "('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
+  },
+  {
+    "question": "Quelle est la périodicité de paiement de la pension FRAM ?",
+    "answer": "",
+    "contexts": [],
+    "ground_truth": "Les pensions FRAM sont versées trimestriellement.",
+    "latency_seconds": 0.0,
+    "category": "",
+    "organization": "",
+    "source_doc": "",
+    "error": "('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
+  }
+]

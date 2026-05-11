@@ -1,0 +1,88 @@
+# ============================================================================
+# Dockerfile.eval — MLOps_RAG_Project (évaluation Ragas + MLflow client)
+# Multi-stage build pour image production-grade
+# ============================================================================
+
+# ============================================================================
+# STAGE 1 : BUILDER — installation des dépendances
+# ============================================================================
+FROM python:3.11-slim AS builder
+
+# Variables d'environnement pour pip
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Dépendances système nécessaires au BUILD (compilateurs, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Copier d'abord les requirements (optimisation du cache Docker)
+COPY requirements.txt ./
+
+# Installer les dépendances dans un venv isolé
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# ============================================================================
+# STAGE 2 : RUNTIME — image finale minimale
+# ============================================================================
+FROM python:3.11-slim AS runtime
+
+# Métadonnées de l'image
+LABEL maintainer="Ouijdane Habchaoui <ouijdanehabchaoui@gmail.com>" \
+      org.opencontainers.image.title="mlops-rag-eval" \
+      org.opencontainers.image.description="Container d'evaluation Ragas pour RAG RCAR/CNRA" \
+      org.opencontainers.image.version="0.1.0" \
+      org.opencontainers.image.source="https://github.com/OuijdaneHabchaoui/mlops-rag-project"
+
+# Variables d'environnement
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH=/app \
+    MLFLOW_TRACKING_URI=http://mlflow:5000
+
+# Dépendances runtime uniquement (curl pour healthcheck)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copier le venv préparé dans le builder stage
+COPY --from=builder /opt/venv /opt/venv
+
+# Créer un utilisateur non-root (SÉCURITÉ critique)
+RUN groupadd --system --gid 1001 mlops && \
+    useradd --system --uid 1001 --gid mlops --create-home --shell /bin/bash mlops
+
+WORKDIR /app
+
+# Copier le code source en respectant les permissions
+COPY --chown=mlops:mlops . /app
+
+# Créer les dossiers nécessaires avec bonnes permissions
+RUN mkdir -p /app/experiments/runs /app/reports /app/logs && \
+    chown -R mlops:mlops /app
+
+# Basculer en utilisateur non-root
+USER mlops
+
+# Healthcheck : vérifie que MLflow tracking server est joignable
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -fsS "${MLFLOW_TRACKING_URI}/health" || exit 1
+
+# Point d'entrée par défaut : lance une éval Ragas sur dataset normalisé
+ENTRYPOINT ["python", "-m"]
+CMD ["evaluation.eval_ragas", \
+     "--experiment", "ci-eval", \
+     "--data-file", "data/reference_test_set_30.jsonl", \
+     "--rag-timeout", "180", \
+     "--delay", "8"]

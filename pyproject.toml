@@ -1,0 +1,111 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlops-rag-project"
+version = "0.1.0"
+description = "Cadre MLOps end-to-end pour chatbot RAG RCAR/CNRA (CDG)"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Ouijdane Habchaoui", email = "ouijdanehabchaoui@gmail.com" }
+]
+license = { text = "Proprietary" }
+keywords = ["mlops", "rag", "ragas", "mlflow", "langfuse", "cdg", "pfe"]
+
+[project.urls]
+Repository = "https://github.com/OuijdaneHabchaoui/mlops-rag-project"
+
+# ============================================================================
+# Ruff — linter rapide (remplace flake8, isort, pylint partiel)
+# https://docs.astral.sh/ruff/
+# ============================================================================
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = [
+    "mlruns",
+    "mlartifacts",
+    "experiments/runs",
+    "logs",
+    "notebooks",
+    "__pycache__",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes (imports inutiles, variables non utilisées)
+    "I",   # isort (ordre des imports)
+    "B",   # flake8-bugbear (anti-patterns)
+    "UP",  # pyupgrade (syntaxe Python moderne)
+    "N",   # pep8-naming
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501", # line too long (géré par black)
+    "B008", # function call in default arg (FastAPI pattern)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]  # assert False autorisé dans tests
+"notebooks/*" = ["E402", "F401"]  # imports inutilisés OK en notebooks
+
+[tool.ruff.lint.isort]
+known-first-party = ["evaluation", "pipeline", "experiments", "utils", "scripts"]
+
+# ============================================================================
+# Black — formatage automatique du code Python
+# https://black.readthedocs.io/
+# ============================================================================
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+extend-exclude = '''
+/(
+  | mlruns
+  | mlartifacts
+  | experiments/runs
+  | logs
+  | \.venv
+)/
+'''
+
+# ============================================================================
+# Pytest — framework de tests
+# ============================================================================
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+markers = [
+    "slow: tests lents (>5s) — peuvent être skippés en CI",
+    "integration: tests d'intégration nécessitant Docker actif",
+]
+
+# ============================================================================
+# Coverage — mesure de couverture des tests
+# ============================================================================
+[tool.coverage.run]
+source = ["evaluation", "pipeline", "experiments", "utils"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "notebooks/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]

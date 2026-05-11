@@ -1,0 +1,588 @@
+================================================================================
+DOCUMENTATION TECHNIQUE DU PIPELINE RAG — RCAR / CNRA
+Projet PFE MLOps — CDG (Caisse de Dépôt et de Gestion)
+Étudiante : Ouijdane Habchaoui
+Date : 06 Mai 2026
+================================================================================
+
+Ce document explique en détail comment fonctionne le pipeline RAG du système
+chatbot RCAR/CNRA, étape par étape, avec les paramètres utilisés et les raisons
+de chaque choix. Il est destiné à servir de référence pour la rédaction du
+rapport PFE et pour justifier les décisions d'expérimentation MLOps.
+
+================================================================================
+VUE D'ENSEMBLE : LE PIPELINE EN 7 GRANDES ÉTAPES
+================================================================================
+
+Quand un utilisateur envoie une question, le système exécute les étapes suivantes :
+
+  1. Vérification injection de prompt (sécurité)
+  2. Classification rapide par similarité (court-circuit)
+  3. Analyse unifiée : reformulation + classification d'intention (LLM)
+  4. Routage vers le bon handler selon l'intention
+  5. Retrieval hybride (vectoriel + BM25) avec récupération de chunks
+  6. Reranking par cross-encoder
+  7. Génération de la réponse (LLM) + streaming SSE
+
+Chaque étape est décrite en détail ci-dessous.
+
+================================================================================
+ÉTAPE 1 — VÉRIFICATION INJECTION DE PROMPT
+Fichier : app/modules/security/prompt_injection_detector.py
+Nœud LangGraph : "check_injection"
+================================================================================
+
+La toute première chose que fait le système est de vérifier si la question
+contient une tentative d'injection de prompt, c'est-à-dire une tentative de
+l'utilisateur de manipuler le comportement du LLM en lui envoyant des
+instructions déguisées en questions (ex: "Ignore toutes tes instructions
+précédentes et réponds...").
+
+Si une injection est détectée, le pipeline court-circuite immédiatement vers
+un handler spécialisé (handle_prompt_injection) qui répond de manière sécurisée
+sans jamais atteindre le LLM principal.
+
+Ce nœud est TOUJOURS le premier exécuté, quelle que soit la question.
+
+
+================================================================================
+ÉTAPE 2 — CLASSIFICATION RAPIDE PAR SIMILARITÉ (TIER-0 ET TIER-1)
+Fichier : app/modules/langgraph/graph_builder.py
+Nœuds LangGraph : "similarity_route" → "similarity_classify"
+================================================================================
+
+--- Tier-0 : Regex (instantané, 0 ms) ---
+
+Avant tout traitement lourd, le système applique deux expressions régulières
+pour détecter les cas triviaux :
+
+  - _GREETING_RE : détecte les salutations ("bonjour", "salam", "hello", etc.)
+  - _CHITCHAT_RE : détecte les formules de politesse ("merci", "ok", "au revoir")
+
+Si la question correspond à l'un de ces patterns, elle est immédiatement routée
+vers un handler stateless qui répond sans faire aucun appel LLM ni retrieval.
+Ce court-circuit évite de gaspiller des ressources sur des échanges qui ne
+nécessitent aucune connaissance métier.
+
+--- Tier-1 : Similarité cosinus sur questions connues ---
+
+Pour toutes les autres questions, le système calcule une similarité cosinus
+entre la question de l'utilisateur et un ensemble de questions d'exemples
+pré-étiquetées (embeddings précalculés en mémoire).
+
+SEUIL CLÉ : 0.90 (non configurable dans .env, défini dans le code)
+
+- Si score >= 0.90 : la question est suffisamment similaire à un exemple connu.
+  Le système peut l'acheminer directement sans passer par le LLM de reformulation.
+  L'intention est déjà connue (ex: "retrieval RCAR").
+
+- Si score < 0.90 : la question est trop différente des exemples connus.
+  Elle passe obligatoirement par l'Étape 3 (unified_analyzer / LLM).
+
+POURQUOI CE SEUIL ? Un seuil de 0.90 est volontairement élevé. Il garantit
+que seules les questions très proches des exemples connus bypassent l'analyse
+LLM. Toute question ambiguë, nouvelle, ou en langage naturel passe par l'analyse.
+
+PROBLÈME OBSERVÉ DANS NOS EXPÉRIENCES : Les questions en langage naturel (ex:
+"je travaille comme agent temporaire") ont généralement une similarité faible
+(0.60-0.75) avec les exemples pré-étiquetés qui utilisent le jargon officiel
+(RCAR, CNRA, FRAM). Ces questions passent donc TOUJOURS par l'Étape 3, ce qui
+crée 4 points de défaillance potentiels (voir analyse des expériences).
+
+
+================================================================================
+ÉTAPE 3 — ANALYSE UNIFIÉE : REFORMULATION + CLASSIFICATION D'INTENTION
+Fichier : app/modules/langgraph/unified_analyzer.py
+Fichier prompt : prompts/intent_classification/unified_reformulation_classification.yaml
+Nœud LangGraph : "unified_analysis"
+LLM utilisé : Mistral ministral-14b-latest
+================================================================================
+
+C'est le nœud central du pipeline pour toutes les questions non triviales.
+Il effectue DEUX opérations en UN SEUL appel LLM (optimisation de coût et latence) :
+
+  1. Reformulation : rendre la question autonome en intégrant le contexte de la
+     conversation (ex: "et pour eux ?" → "quelles sont les conditions pour les
+     orphelins d'un affilié RCAR décédé ?")
+
+  2. Classification d'intention : déterminer ce que l'utilisateur veut faire.
+
+--- Les intentions possibles ---
+
+  - retrieval : l'utilisateur pose une question factuelle qui nécessite de
+    chercher dans les documents (ex: "quelles sont les conditions pour la retraite ?")
+  - procedural : l'utilisateur demande comment faire quelque chose, étape par
+    étape (ex: "comment m'affilier au RCAR ?")
+  - confirmation : l'utilisateur valide ou infirme une réponse précédente
+    (ex: "tu es sûr ?", "c'est bien ça ?")
+  - multi_part : la question contient plusieurs sous-questions distinctes
+  - out_of_scope : question hors domaine RCAR/CNRA
+  - calculation : demande de calcul de pension
+  - greeting, chitchat, feedback : cas non-métier
+
+--- Paramètres de confiance ---
+
+  UNIFIED_RETRIEVAL_THRESHOLD=0.5
+  → Seuil de confiance pour l'intention "retrieval". Plus permissif (0.5) car
+    les questions métier doivent presque toujours déclencher une recherche.
+    Un seuil bas évite de rejeter des questions légitimement ambiguës.
+
+  UNIFIED_OTHER_INTENT_THRESHOLD=0.7
+  → Seuil pour toutes les autres intentions. Plus strict (0.7) car une fausse
+    détection de "confirmation" ou "out_of_scope" peut court-circuiter le
+    retrieval et donner une réponse incorrecte.
+
+  UNIFIED_MAX_HISTORY_TURNS=10
+  → Le LLM voit au maximum les 10 derniers échanges de conversation pour
+    reformuler la question en contexte. Au-delà, le contexte est trop long
+    pour être utile et augmente inutilement les tokens.
+
+  UNIFIED_ANALYSIS_MAX_TOKENS=800
+  → La réponse JSON du LLM est limitée à 800 tokens. Suffisant pour contenir
+    reformulated_query + intent + confidence + reasoning + sub_questions.
+
+--- Sortie de unified_analyzer ---
+
+Le LLM retourne un JSON avec :
+  - reformulated_query : la question reformulée
+  - intent : l'intention classifiée
+  - confidence : score entre 0.0 et 1.0
+  - reasoning : explication du choix
+  - is_confirmation : booléen (détecté AVANT reformulation pour éviter de perdre le signal)
+  - sub_questions : liste si multi_part
+
+PROBLÈME DU GLOSSAIRE (découvert en expérimentation) :
+Mistral ministral-14b est un LLM généraliste. Sans instruction spécifique, il
+ne connaît pas les acronymes propriétaires CDG (RCAR, FRAM, RECORE, CMR, etc.)
+et peut les inventer incorrectement. Solution : ajout d'un glossaire complet dans
+le system_prompt du fichier YAML (voir modifications Exp.3→Exp.5).
+
+PARAMÈTRE CLÉ EXPÉRIMENTÉ :
+  USE_QUERY_NORMALIZATION=false (valeur actuelle, recommandée)
+  → Quand true : unified_analyzer reformule la query avec normalisation LLM
+    (corriger orthographe, résoudre abréviations).
+  → Quand false : la query est utilisée plus directement, sans sur-reformulation.
+  → Résultat exp : false améliore faithfulness +8.3% sur dataset normalisé car
+    la normalisation introduit des dérives sémantiques sur le vocabulaire métier.
+
+
+================================================================================
+ÉTAPE 4 — ROUTAGE VERS LE HANDLER APPROPRIÉ
+Fichier : app/modules/langgraph/graph_builder.py
+Nœud LangGraph : "route_by_intent" (conditional edges)
+================================================================================
+
+En fonction de l'intention classifiée à l'Étape 3, LangGraph route la requête
+vers l'un des handlers enregistrés :
+
+  - "retrieval" / "procedural" → unified_document_handler (le plus fréquent)
+  - "confirmation"             → context_followup_handler
+  - "multi_part"               → multi_part_handler
+  - "out_of_scope"             → stateless_handler (répond sans retrieval)
+  - "calculation"              → calculation_handler
+  - "feedback"                 → feedback_handler
+  - "prompt_injection"         → prompt_injection_handler
+
+La quasi-totalité des questions métier RCAR/CNRA atterrissent dans
+unified_document_handler. C'est ce handler qui contient toute la logique
+de retrieval, reranking et génération.
+
+
+================================================================================
+ÉTAPE 5 — RETRIEVAL HYBRIDE : VECTORIEL + BM25
+Fichier : core/retrieval/pg_layered_retriever.py
+Base de données : PostgreSQL + extension pgvector
+================================================================================
+
+C'est le cœur du RAG. Le système cherche les chunks de documents les plus
+pertinents pour répondre à la question. Il utilise une combinaison de deux
+méthodes complémentaires.
+
+--- Chunking préalable des documents ---
+
+Avant qu'une question arrive, les documents RCAR et CNRA ont été découpés en
+"chunks" (morceaux de texte) lors de l'ingestion :
+
+  CHUNK_SIZE=450
+  → Chaque chunk contient au maximum 450 tokens. Ce choix est un compromis :
+    trop petit = contexte insuffisant pour répondre ; trop grand = dilution de
+    la pertinence et dépassement du budget de contexte.
+
+  CHUNK_OVERLAP=50
+  → Les chunks se chevauchent de 50 tokens pour éviter de couper une information
+    à la frontière entre deux chunks.
+
+  CHUNK_MIN_SIZE=256
+  → Les chunks trop petits (moins de 256 tokens) sont fusionnés avec le suivant.
+
+Chaque chunk est ensuite transformé en vecteur de 1024 dimensions par le modèle
+d'embedding Mistral (mistral-embed), puis stocké dans PostgreSQL avec pgvector.
+
+--- Récupération hybride : 6 étapes dans PgLayeredRetriever ---
+
+PARAMÈTRES HIÉRARCHIQUES :
+  HIER_TOP_M_DOCS=3              → sélectionner les 3 meilleurs documents
+  HIER_TOP_N_CHUNKS_PER_DOC=3   → garder 3 chunks par document sélectionné
+  HIER_TOP_K_CHUNKS_FOR_DOC_SCORE=5 → utiliser les 5 meilleurs chunks pour scorer un doc
+  HIER_RERANKER_TOP_K=5         → garder 5 chunks après reranking hiérarchique
+
+  RETRIEVAL_VECTOR_WEIGHT=0.7   → la similarité vectorielle compte pour 70%
+  RETRIEVAL_BM25_WEIGHT=0.3     → BM25 (matching de mots-clés) compte pour 30%
+
+Voici comment se déroule la récupération, telle qu'implémentée dans le code :
+
+  Stage 1 — Candidats bruts
+  Pour chaque chunk dans les documents actifs (is_latest=true), le système
+  calcule deux scores :
+    * Cosine similarity entre le vecteur du chunk et le vecteur de la query
+      (les deux calculés par mistral-embed, 1024 dimensions)
+    * Score BM25 basé sur la fréquence des termes dans le chunk
+
+  Stage 2 — Normalisation dynamique
+  Le système calcule le MIN et MAX globaux de chaque score sur l'ensemble
+  des candidats de cette requête. Cela permet une normalisation min-max
+  indépendante de la distribution de scores de chaque requête.
+
+  Stage 3 — Score hybride
+  hybrid_score = 0.7 * norm_cosine + 0.3 * norm_BM25
+  Les poids (70/30) ont été choisis car la similarité sémantique (vectorielle)
+  est plus fiable que BM25 sur des textes juridiques/administratifs français
+  avec beaucoup de termes techniques. BM25 aide pour les cas où un mot-clé
+  précis doit être trouvé (ex: numéro d'article, montant exact).
+
+  Stage 4 — Représentants par document
+  Pour chaque document candidat, on prend les top-5 chunks (HIER_TOP_K=5)
+  par score cosinus brut. Ce sont les "représentants" du document.
+
+  Stage 5 — Score de document
+  On calcule la moyenne des hybrid_scores des représentants de chaque document.
+  On sélectionne les top-3 documents (HIER_TOP_M_DOCS=3) par ce score moyen.
+
+  Stage 6 — Chunks finaux
+  Pour les 3 documents sélectionnés, on prend les top-3 chunks par hybrid_score
+  (HIER_TOP_N_CHUNKS_PER_DOC=3).
+  Résultat : au maximum 3 × 3 = 9 chunks candidats.
+
+POURQUOI CETTE ARCHITECTURE HIÉRARCHIQUE ?
+L'approche naïve (chercher directement les K meilleurs chunks toutes sources
+confondues) favorise les documents avec beaucoup de chunks sur le même sujet.
+L'approche hiérarchique garantit la diversité documentaire : on choisit d'abord
+les meilleurs DOCUMENTS, puis les meilleurs chunks dans chacun d'eux.
+
+--- Retrieval deux couches (FAQ + Général) ---
+
+  FAQ_PARALLEL_PATH_ENABLED=true
+  → Le système effectue DEUX recherches en parallèle :
+    1. Dans les documents FAQ (questions-réponses officielles RCAR/CNRA)
+    2. Dans les documents généraux (décrets, guides, textes de loi)
+  Le handler essaie d'abord de répondre depuis la FAQ. Si le LLM détecte
+  que la réponse FAQ est insuffisante ("je ne sais pas"), il enchaîne sur
+  les documents généraux. Cette architecture améliore la précision car les
+  FAQ contiennent déjà des réponses pré-formulées dans le bon format.
+
+--- Options de retrieval avancées (actuellement désactivées) ---
+
+  USE_HYDE=false
+  → HyDE (Hypothetical Document Embeddings) : au lieu d'embedder la question,
+    le LLM génère d'abord une "réponse hypothétique" à la question, puis on
+    embedde cette réponse pour le retrieval. L'idée : la réponse hypothétique
+    contient le vocabulaire des chunks ("pension d'invalidité", "incapacité
+    totale", etc.) même si la question originale utilisait un langage naturel.
+    MAX_TOKENS pour HyDE : HYDE_MAX_TOKENS=350 tokens.
+    STATUT : désactivé car coût additionnel d'un appel LLM par requête, et
+    impact non encore mesuré sur notre dataset. PROCHAINE EXPÉRIENCE : Exp.8.
+
+  USE_MULTI_QUERY_EXPANSION=false
+  → Multi-query : génère MULTI_QUERY_NUM_VARIANTS=1 variantes de la query,
+    fait le retrieval sur chacune, merge et déduplique les résultats.
+    ENABLE_MULTI_QUERY_DEDUP=true / DEDUP_USE_CHUNK_ID=true (déduplication
+    par chunk_id pour éviter les doublons cross-variants).
+    STATUT : désactivé car risque de dilution des résultats avec 1 seule variante.
+
+
+================================================================================
+ÉTAPE 6 — RERANKING PAR CROSS-ENCODER (COHERE)
+Fichier : core/retrieval/reranker.py
+Paramètre : RERANKER_PROVIDER=cohere / COHERE_API_KEY
+================================================================================
+
+Après le retrieval hybride, on a typiquement 5 à 9 chunks candidats. Le
+reranker les classe à nouveau en utilisant un modèle beaucoup plus puissant
+(cross-encoder Cohere), qui évalue la paire (question, chunk) ensemble plutôt
+que séparément.
+
+  RETRIEVAL_TOP_K_INITIAL=15
+  → Nombre de chunks récupérés initialement avant reranking. On délibérément
+    sur-recrute pour donner au reranker plus de candidats à évaluer.
+
+  RETRIEVAL_TOP_K_FINAL=8
+  → Après reranking, on ne garde que les 8 meilleurs chunks. Ce sont ces 8
+    chunks qui seront envoyés au LLM pour générer la réponse.
+
+  RERANKER_TOP_K=12
+  → Dans le contexte du budget total de tokens (voir ci-dessous), on utilise
+    au maximum 12 chunks pour calculer le budget dynamique.
+
+POURQUOI UN RERANKER SÉPARÉ ?
+Le retrieval hybride (vectoriel + BM25) optimise la RECALL (trouver tous les
+chunks potentiellement pertinents). Le cross-encoder optimise la PRÉCISION
+(éliminer les chunks pertinents en surface mais pas vraiment utiles). Cohere
+est un service cloud (pas de GPU local nécessaire) ce qui est adapté aux
+contraintes de déploiement du projet.
+
+ALTERNATIVE LOCALE : RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-12-v2
+→ Ce modèle local peut remplacer Cohere si l'accès cloud est impossible.
+  On le configure avec RERANKER_DEVICE=cpu, RERANKER_BATCH_SIZE=8.
+
+
+================================================================================
+ÉTAPE 7 — GÉNÉRATION DE LA RÉPONSE (LLM MISTRAL) + STREAMING
+Fichier : app/modules/langgraph/handlers/unified_document_handler.py
+LLM : Mistral ministral-14b-latest (API Mistral AI)
+================================================================================
+
+Les 8 chunks retenus après reranking sont assemblés dans un prompt qui est
+envoyé au LLM pour générer la réponse finale.
+
+--- Paramètres du LLM ---
+
+  LLM_MODEL=ministral-14b-latest
+  → Modèle Mistral de 14 milliards de paramètres, optimisé pour les instructions
+    en français. Plus précis que les petits modèles, plus économique que les
+    très grands modèles (32B+).
+
+  LLM_TEMPERATURE=0.1
+  → Température très basse. Plus la température est basse, plus les réponses
+    sont déterministes et factuelles. Une haute température (0.8+) donnerait
+    des réponses plus "créatives" mais moins fiables pour un chatbot de retraite
+    où l'exactitude est critique.
+
+  LLM_MAX_TOKENS=4096
+  → Longueur maximale de la réponse générée. 4096 tokens ≈ 3000 mots environ.
+    Suffisant pour des réponses détaillées avec procédures et tableaux.
+
+  LLM_TIMEOUT=60
+  → Si le LLM ne répond pas en 60 secondes, la requête est abandonnée.
+
+--- Budget de contexte dynamique ---
+
+  CONTEXT_TOTAL_BUDGET=16000
+  → Le contexte total envoyé au LLM (system prompt + historique + chunks +
+    question) ne doit pas dépasser 16 000 tokens. C'est une contrainte du
+    modèle ministral-14b.
+
+  Le budget est alloué dynamiquement :
+    * System prompt : mesuré au runtime (~2000-3000 tokens)
+    * Chunks : RERANKER_TOP_K × CHUNK_MAX_SIZE = 12 × 450 = 5400 tokens max
+    * Historique conversationnel : le reste disponible
+    * CHAT_HISTORY_TOKEN_LIMIT=4096 tokens max pour l'historique
+    * CHAT_HISTORY_MAX_TURNS=15 tours de conversation maximum
+    * Si l'historique dépasse CHAT_HISTORY_SUMMARIZE_THRESHOLD=15 tours,
+      il est automatiquement résumé par le LLM pour libérer de l'espace.
+
+--- Sélection conditionnelle du prompt ---
+
+Le système choisit le template de prompt en fonction de l'intention :
+  - Intent "retrieval" → tier1/retrieval.yaml (explication factuelle)
+  - Intent "procedural" → tier2/procedural_with_context.yaml (guide étape par étape)
+  - Intent "personal_info_request" → tier1/personal_info_request.yaml
+  - Intent "administrative_declaration" → tier1/administrative_declaration.yaml
+
+Ce mécanisme garantit que la réponse est formatée de manière appropriée selon
+le type de question (une question sur les conditions d'éligibilité n'a pas le
+même format qu'une question sur la procédure à suivre).
+
+--- Streaming SSE ---
+
+  USE_LANGGRAPH_STREAMING=true
+  → Les tokens de la réponse sont envoyés au client au fur et à mesure
+    (Server-Sent Events), sans attendre que toute la réponse soit générée.
+    Cela améliore l'expérience utilisateur perçue (première réponse en ~1s
+    au lieu d'attendre 10-30s).
+
+  STREAMING_BUFFER_SIZE=50 / FAQ_STREAMING_BUFFER_SIZE=50
+  → Le système accumule les 50 premiers caractères de la réponse streamée avant
+    de les analyser. Si ces 50 caractères contiennent "Je ne sais pas" ou
+    "Je ne retrouve pas", le streaming est ABORTÉ et le système passe
+    automatiquement à la couche 2 (documents généraux au lieu de FAQ).
+    Ce mécanisme évite d'envoyer le début d'une réponse négative à l'utilisateur.
+
+  LANGGRAPH_TIMEOUT=180
+  → Timeout global du pipeline LangGraph : 180 secondes maximum pour l'ensemble
+    de la chaîne (retrieval + LLM). En pratique, la plupart des réponses
+    arrivent en 5-15 secondes.
+
+
+================================================================================
+RÉCAPITULATIF DES PARAMÈTRES CLÉS ET LEUR IMPACT SUR LES EXPÉRIENCES
+================================================================================
+
+Paramètre                        | Valeur actuelle | Impact mesuré
+---------------------------------|-----------------|--------------------------------------------------
+USE_QUERY_NORMALIZATION          | false           | false > true (+8.3% faithfulness, Exp.1 vs 2)
+USE_HYDE                         | false           | Non encore mesuré (prévu Exp.8)
+USE_MULTI_QUERY_EXPANSION        | false           | Non encore mesuré
+RETRIEVAL_VECTOR_WEIGHT          | 0.7             | Non varié (valeur par défaut, standard en RAG)
+RETRIEVAL_BM25_WEIGHT            | 0.3             | Non varié
+RERANKER_PROVIDER                | cohere          | Non varié (seul fournisseur testé)
+RETRIEVAL_TOP_K_INITIAL          | 15              | Non varié
+RETRIEVAL_TOP_K_FINAL            | 8               | Non varié
+CHUNK_SIZE                       | 450             | Non varié (chunks RCAR/CNRA déjà ingérés)
+HIER_TOP_M_DOCS                  | 3               | Non varié
+UNIFIED_RETRIEVAL_THRESHOLD      | 0.5             | Non varié
+UNIFIED_OTHER_INTENT_THRESHOLD   | 0.7             | Non varié
+Glossaire dans unified_analyzer  | Oui (depuis Exp5)| +21% faithfulness sur naturel (Exp4 vs 6)
+GTs style RAG dans dataset eval  | Oui (depuis Exp7)| +46% answer_correctness (Exp6 vs 7)
+LLM_TEMPERATURE                  | 0.1             | Non varié (réponses déterministes voulues)
+
+
+================================================================================
+POURQUOI LE PIPELINE EST "FRAGILE" SUR LE LANGAGE NATUREL
+(Analyse issue des expériences 3 à 7)
+================================================================================
+
+Quand un utilisateur écrit "Je suis avocat et j'ai besoin d'une retraite",
+voici ce qui se passe concrètement dans chaque étape :
+
+  Étape 2 — Similarité : score ≈ 0.65 < 0.90 → passe par unified_analyzer ✓
+
+  Étape 3 — unified_analyzer reformule : "Conditions d'affiliation FRAM avocat"
+    ✓ Si le glossaire est présent : FRAM correctement identifié
+    ✗ Sans glossaire : LLM invente "FRAM = Fonds de Retraite des Avocats Marocains"
+      ou confond avec RCAR
+
+  Étape 5 — Retrieval sur "Conditions d'affiliation FRAM avocat" :
+    La similarité vectorielle de cette query avec les chunks qui parlent de
+    "Fonds de Retraite des Avocats du Maroc" et "affiliation CNRA" peut être
+    suffisamment haute pour retourner des résultats ✓
+
+    MAIS pour d'autres questions naturelles ("suite à une maladie grave..."),
+    la reformulation peut devenir "invalidité RCAR incapacité totale" alors
+    que les chunks indexés disent "pension viagère d'invalidité" et "incapacité
+    totale et définitive" → vocabulaire proche mais pas identique → score < seuil
+    → 0 résultats
+
+  Étape 7 — Si 0 chunks : LLM génère "Je ne retrouve pas cette information"
+    → faithfulness = 0 pour cette question dans Ragas
+
+C'est pourquoi 13/20 questions naturelles retournent 0 chunks malgré un contenu
+RCAR/CNRA existant dans la base. Le problème n'est PAS l'absence de données,
+c'est le GAP SÉMANTIQUE entre la query reformulée et le vocabulaire des chunks.
+
+SOLUTION PROPOSÉE (Expérience 8) : HyDE
+Au lieu d'embedder la query reformulée ("invalidité RCAR incapacité travail"),
+HyDE génère d'abord une réponse hypothétique complète :
+  "Pour bénéficier d'une pension d'invalidité au RCAR, l'affilié doit se trouver
+   dans l'incapacité totale et définitive d'exercer ses fonctions. La demande
+   doit être introduite par l'employeur accompagnée d'un certificat médical..."
+Puis on embedde CETTE réponse hypothétique pour le retrieval.
+Cette réponse contient les termes exacts utilisés dans les chunks → meilleur
+matching → plus de questions trouvent leurs contextes → faithfulness hausse.
+
+
+================================================================================
+PARAMÈTRES DE CONTRÔLE ET MONITORING
+================================================================================
+
+QUEUE_ENABLED=true / QUEUE_MAX_CONCURRENT=10 / QUEUE_MAX_SIZE=20
+→ Le serveur gère une file d'attente pour éviter la surcharge. Maximum 10
+  requêtes traitées simultanément, 20 en attente. Si la file est pleine,
+  les nouvelles requêtes reçoivent une erreur 503.
+  QUEUE_AVG_QUERY_TIME=30s → estimation utilisée pour calculer le temps d'attente
+  communiqué à l'utilisateur.
+
+RATE_LIMIT_ENABLED=true / RATE_LIMIT_REQUESTS_PER_MINUTE=200
+→ Un même utilisateur/IP ne peut pas faire plus de 200 requêtes par minute.
+  Protection contre les abus et les scripts automatisés.
+
+METRICS_ENABLED=true / METRICS_PORT=9090
+→ Les métriques Prometheus (latence, nombre de requêtes, erreurs) sont exposées
+  sur le port 9090 pour être collectées par Grafana.
+  GRAFANA_BIND_ADDRESS=0.0.0.0 → Grafana accessible depuis toute interface réseau.
+
+ENABLE_META_CONTEXT_ANALYSIS=true
+→ Analyse additionnelle du contexte des chunks pour détecter des patterns
+  (ex: plusieurs chunks contradictoires, manque d'information sur un aspect
+  de la question). Paramètres : META_HIGH_CONFIDENCE_THRESHOLD=0.8,
+  META_MEDIUM_CONFIDENCE_THRESHOLD=0.5, CHUNK_CONTEXT_MAX_TOTAL=36.
+
+DISABLE_LEGACY_FALLBACK=true
+→ En cas d'erreur dans LangGraph, le système NE retombe PAS sur le pipeline
+  RAG "legacy" (pre-LangGraph). Les erreurs remontent directement. Cela garantit
+  que les comportements observés en expérimentation reflètent exactement le
+  pipeline LangGraph actuel, sans contamination par l'ancien code.
+
+FAILURE_ANALYSIS_ENABLED=false
+→ Analyse automatique des échecs (désactivée). Quand activée, un job planifié
+  analyse les conversations ayant échoué (réponses "je ne sais pas", erreurs)
+  et génère un rapport périodique.
+
+
+================================================================================
+INFRASTRUCTURE DOCKER
+================================================================================
+
+Le système est déployé via Docker Compose avec les services suivants :
+  - app         : le serveur FastAPI (port 5010 interne, 80 externe via Nginx)
+  - postgres    : PostgreSQL 15 + pgvector (port 5433)
+  - redis       : cache sessions (port 6379)
+  - grafana     : dashboard monitoring (port 3001)
+  - prometheus  : collecte métriques (port 9090)
+
+POINT CRITIQUE DÉCOUVERT EN EXPÉRIMENTATION :
+"docker restart newrag_app" ne relit PAS le fichier .env.
+Les variables d'environnement sont "baked" (figées) lors de la création du
+conteneur avec "docker compose up".
+La commande correcte pour appliquer un changement de .env est :
+  docker compose up -d --no-deps app
+Vérification : docker exec newrag_app env | grep NOM_VARIABLE
+
+EMBEDDING_PROVIDER=mistral
+→ Les embeddings sont calculés via l'API Mistral (mistral-embed, 1024 dims).
+  Alternative locale : EMBEDDING_PROVIDER=sentence_transformers avec le modèle
+  intfloat/multilingual-e5-large-instruct (1024 dims également, compatible).
+  Les deux produisent la même dimension → pas besoin de re-indexer les documents
+  si on change de provider.
+
+KB_LLM_PROVIDER=gemini / KB_LLM_MODEL=gemini-2.5-pro
+→ Pour l'extraction de métadonnées lors de l'ingestion de nouveaux documents
+  dans la base de connaissances, un LLM Gemini séparé est utilisé. Ce LLM est
+  distinct du LLM principal (Mistral) pour éviter la dépendance sur un seul
+  fournisseur lors de l'ingestion.
+
+MINIO_ENABLED=false
+→ Le stockage d'objets (MinIO, compatible S3) est désactivé. Les PDF uploadés
+  et les pièces jointes des feedbacks renvoient une erreur 503 tant que MinIO
+  n'est pas déployé. Pour l'activer : MINIO_ENABLED=true + service MinIO dans
+  docker-compose.
+
+JWT_SECRET_KEY / JWT_ALGORITHM=HS256 / JWT_ACCESS_TOKEN_EXPIRE_MINUTES=120
+→ L'authentification utilise des tokens JWT (JSON Web Token). Les tokens
+  expirent après 2 heures. Les tokens de rafraîchissement durent 7 jours.
+  Note : l'LDAP/Active Directory a été retiré pour la distribution interne.
+  L'authentification est actuellement "stubbed" (simulée).
+
+
+================================================================================
+RÉSUMÉ : CE QUE FAIT LE PIPELINE QUAND UN UTILISATEUR POSE UNE QUESTION
+================================================================================
+
+Temps approximatif de chaque étape (mesures empiriques) :
+
+  1. Vérification injection        : < 10 ms
+  2. Regex tier-0                  : < 1 ms
+  3. Similarité cosinus (tier-1)   : 20-50 ms (embedding + calcul)
+  4. unified_analyzer (LLM)        : 500-2000 ms (si score < 0.90)
+  5. Retrieval hybride pgvector    : 100-300 ms (SQL + cosine)
+  6. Reranking Cohere              : 300-800 ms (API externe)
+  7. Génération LLM + streaming    : 3000-15000 ms (premier token ~1-2s)
+                                    -----------------------------------------
+  TOTAL TYPIQUE                    : 4-18 secondes (latence perçue ~1-2s
+                                     grâce au streaming)
+
+  HANDLER_TIMEOUT=60s → la chaîne complète doit finir en moins de 60 secondes.
+  LANGGRAPH_TIMEOUT=180s → timeout du graphe complet (incluant les retries).
+
+================================================================================
+FIN DU DOCUMENT
+================================================================================

@@ -246,7 +246,7 @@ def latency_stats(results: list[dict]) -> dict:
     }
 
 
-def main() -> None:
+def main() -> None:  # pragma: no cover
     parser = argparse.ArgumentParser(description="Évaluation Ragas du RAG")
     parser.add_argument("--limit", type=int, default=None, help="Limite de questions (smoke test)")
     parser.add_argument("--base-url", default="http://localhost:5010", help="URL du RAG shipping")
@@ -325,7 +325,6 @@ def main() -> None:
     norm_flag = os.getenv("USE_QUERY_NORMALIZATION", "unknown")
     run_label = f"norm_{norm_flag}_{timestamp}"
     with mlflow.start_run(run_name=run_label) as run:
-
         # 1. Collecte RAG (ou chargement depuis fichier)
         if args.from_responses:
             logger.info("=== ÉTAPE 1/3 : Chargement réponses depuis %s ===", args.from_responses)

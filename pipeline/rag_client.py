@@ -193,7 +193,7 @@ class RAGClient:
         self.close()
 
 
-def _cli() -> None:
+def _cli() -> None:  # pragma: no cover
     """Test rapide en ligne de commande : `python -m pipeline.rag_client "Qu'est-ce que le RCAR ?"`"""
     import argparse
 

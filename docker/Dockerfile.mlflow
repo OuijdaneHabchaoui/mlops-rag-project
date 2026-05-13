@@ -1,0 +1,12 @@
+FROM python:3.11-slim
+
+WORKDIR /mlflow
+
+# Installation de la version EXACTE de MLflow
+RUN pip install --no-cache-dir mlflow==3.11.1
+
+# Exposition du port
+EXPOSE 5000
+
+# On utilise une commande flexible
+CMD ["bash", "-c", "mlflow db upgrade sqlite:////mlflow/mlflow.db && mlflow server --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/mlartifacts --host 0.0.0.0 --port 5000"]
